@@ -81,7 +81,8 @@ const Utils = {
     validateOHLC: function(item) {
         return (
             item &&
-            typeof item.time === 'string' &&
+            typeof item.time === 'number' &&
+            item.time > 0 &&
             typeof item.open === 'number' &&
             typeof item.high === 'number' &&
             typeof item.low === 'number' &&

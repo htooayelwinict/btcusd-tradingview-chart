@@ -81,11 +81,12 @@ class BTCUSDChart {
                 throw new Error(`Container element with id '${this.containerId}' not found`);
             }
 
-            // Create the chart
+            // Create the chart using TradingView Lightweight Charts
+            const { createChart, CandlestickSeries } = window.LightweightCharts;
             this.chart = createChart(this.container, this.options);
 
             // Add candlestick series
-            this.candlestickSeries = this.chart.addCandlestickSeries({
+            this.candlestickSeries = this.chart.addSeries(CandlestickSeries, {
                 upColor: '#26a69a',
                 downColor: '#ef5350',
                 borderVisible: false,

@@ -120,11 +120,12 @@ const DataProcessor = {
     formatDateTimeForTradingView: function(datetime) {
         try {
             // Input format: "2019-12-03 06:15"
-            // TradingView accepts this format directly
-            return datetime;
+            // TradingView Lightweight Charts expects Unix timestamp in seconds
+            const date = new Date(datetime);
+            return Math.floor(date.getTime() / 1000);
         } catch (error) {
-            console.error('Error formatting datetime:', error);
-            return datetime; // Return original if formatting fails
+            console.error('Error formatting datetime:', error, 'for datetime:', datetime);
+            return null; // Return null if formatting fails
         }
     },
 
