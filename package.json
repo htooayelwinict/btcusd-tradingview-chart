@@ -1,0 +1,45 @@
+{
+  "name": "btcusd-chart",
+  "version": "1.0.0",
+  "description": "BTCUSD 15-minute chart using TradingView Lightweight Charts",
+  "main": "index.html",
+  "scripts": {
+    "start": "live-server --port=8080 --open=index.html --quiet",
+    "dev": "live-server --port=8080 --open=index.html --no-css-inject",
+    "serve": "python3 -m http.server 8080",
+    "serve-https": "python3 -m http.server 8080 --bind 0.0.0.0 --directory .",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "bitcoin",
+    "chart",
+    "tradingview",
+    "cryptocurrency",
+    "btc",
+    "usd",
+    "financial",
+    "trading",
+    "lightweight-charts"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "live-server": "^1.2.2"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "browserslist": [
+    "defaults",
+    "not IE 11",
+    "not dead"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/username/btcusd-chart.git"
+  },
+  "homepage": "https://github.com/username/btcusd-chart#readme",
+  "bugs": {
+    "url": "https://github.com/username/btcusd-chart/issues"
+  }
+}

@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BTCUSD 15-Minute Chart</title>
+
+    <!-- TradingView Lightweight Charts -->
+    <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>BTCUSD 15-Minute Chart</h1>
+            <div class="header-info">
+                <span id="loading-indicator">Loading data...</span>
+                <span id="error-message" class="error" style="display: none;"></span>
+            </div>
+        </header>
+
+        <main>
+            <div id="chart-container"></div>
+
+            <div id="chart-info">
+                <div class="info-section">
+                    <span class="info-label">Data Points:</span>
+                    <span id="data-count">Loading...</span>
+                </div>
+                <div class="info-section">
+                    <span class="info-label">Date Range:</span>
+                    <span id="date-range">Loading...</span>
+                </div>
+                <div class="info-section">
+                    <span class="info-label">Price Range:</span>
+                    <span id="price-range">Loading...</span>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/utils.js"></script>
+    <script src="js/dataProcessor.js"></script>
+    <script src="js/chart.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>
