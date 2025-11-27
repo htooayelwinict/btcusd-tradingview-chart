@@ -1,0 +1,329 @@
+/**
+ * Toolbar CSS - Styles for drawing tools toolbar
+ */
+
+.chart-toolbar {
+    position: absolute;
+    background: rgba(0, 0, 0, 0.9);
+    border: 1px solid rgba(42, 46, 57, 0.8);
+    border-radius: 8px;
+    backdrop-filter: blur(10px);
+    z-index: 1000;
+    min-width: 200px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    font-size: 12px;
+    color: #d1d4dc;
+}
+
+/* Position variants */
+.chart-toolbar.position-top-left {
+    top: 20px;
+    left: 20px;
+}
+
+.chart-toolbar.position-top-right {
+    top: 20px;
+    right: 20px;
+}
+
+.chart-toolbar.position-bottom-left {
+    bottom: 20px;
+    left: 20px;
+}
+
+.chart-toolbar.position-bottom-right {
+    bottom: 20px;
+    right: 20px;
+}
+
+/* Theme variants */
+.chart-toolbar.theme-light {
+    background: rgba(255, 255, 255, 0.9);
+    border-color: rgba(200, 200, 200, 0.8);
+    color: #333;
+}
+
+.chart-toolbar.theme-light .tool-btn,
+.chart-toolbar.theme-light .action-btn {
+    background: rgba(255, 255, 255, 0.8);
+    color: #333;
+    border-color: rgba(200, 200, 200, 0.6);
+}
+
+.chart-toolbar.theme-light .tool-btn:hover,
+.chart-toolbar.theme-light .action-btn:hover {
+    background: rgba(240, 240, 240, 0.9);
+    border-color: rgba(180, 180, 180, 0.8);
+}
+
+.chart-toolbar.theme-light .tool-btn.active {
+    background: rgba(59, 130, 246, 0.8);
+    color: white;
+    border-color: rgba(59, 130, 246, 1);
+}
+
+/* Header */
+.toolbar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    border-bottom: 1px solid rgba(42, 46, 57, 0.5);
+    font-weight: 500;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.toolbar-title {
+    color: #9ca3af;
+}
+
+.toolbar-toggle {
+    background: none;
+    border: none;
+    color: #9ca3af;
+    font-size: 14px;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 3px;
+    transition: all 0.2s ease;
+}
+
+.toolbar-toggle:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #d1d4dc;
+}
+
+/* Content */
+.toolbar-content {
+    padding: 8px;
+}
+
+.tool-group {
+    margin-bottom: 12px;
+}
+
+.tool-group:last-child {
+    margin-bottom: 0;
+}
+
+.tool-group-title {
+    font-size: 10px;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+    padding-left: 4px;
+}
+
+/* Tool buttons */
+.tool-buttons,
+.action-buttons {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(40px, 1fr));
+    gap: 4px;
+}
+
+.tool-btn,
+.action-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 36px;
+    padding: 6px 8px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    color: #d1d4dc;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.tool-btn:hover,
+.action-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.2);
+    transform: translateY(-1px);
+}
+
+.tool-btn:active,
+.action-btn:active {
+    transform: translateY(0);
+}
+
+.tool-btn.active {
+    background: var(--tool-color, rgba(59, 130, 246, 0.8));
+    border-color: var(--tool-color, rgba(59, 130, 246, 1));
+    color: white;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.tool-icon,
+.action-icon {
+    font-size: 16px;
+    line-height: 1;
+    margin-bottom: 2px;
+}
+
+.tool-label,
+.action-label {
+    font-size: 9px;
+    line-height: 1;
+    opacity: 0.8;
+    text-align: center;
+}
+
+.tool-btn:hover .tool-label,
+.action-btn:hover .action-label {
+    opacity: 1;
+}
+
+/* Tool specific colors */
+.tool-btn[data-tool="trendline"] {
+    --tool-color: #FF6B6B;
+}
+
+.tool-btn[data-tool="horizontal"] {
+    --tool-color: #4ECDC4;
+}
+
+.tool-btn[data-tool="fibonacci"] {
+    --tool-color: #9B59B6;
+}
+
+/* State indicators */
+.chart-toolbar.state-drawing {
+    border-color: #10b981;
+    box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+}
+
+.chart-toolbar.state-drawing .toolbar-header {
+    background: rgba(16, 185, 129, 0.1);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .chart-toolbar {
+        min-width: 160px;
+    }
+
+    .tool-label,
+    .action-label {
+        display: none;
+    }
+
+    .tool-buttons,
+    .action-buttons {
+        grid-template-columns: repeat(4, 1fr);
+        gap: 2px;
+    }
+
+    .tool-btn,
+    .action-btn {
+        min-height: 32px;
+        padding: 4px;
+    }
+
+    .tool-icon,
+    .action-icon {
+        font-size: 14px;
+    }
+}
+
+@media (max-width: 480px) {
+    .chart-toolbar.position-top-right,
+    .chart-toolbar.position-bottom-right {
+        right: 10px;
+        top: 10px;
+        bottom: auto;
+    }
+
+    .chart-toolbar.position-top-left,
+    .chart-toolbar.position-bottom-left {
+        left: 10px;
+        top: 10px;
+        bottom: auto;
+    }
+}
+
+/* Collapsible state */
+.toolbar-content.hidden {
+    display: none;
+}
+
+/* Animation */
+.toolbar-content {
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.toolbar-content.hidden {
+    opacity: 0;
+    transform: translateY(-10px);
+}
+
+/* Focus styles for accessibility */
+.tool-btn:focus,
+.action-btn:focus,
+.toolbar-toggle:focus {
+    outline: 2px solid #3b82f6;
+    outline-offset: 2px;
+}
+
+/* Loading state */
+.tool-btn.loading,
+.action-btn.loading {
+    pointer-events: none;
+    opacity: 0.6;
+}
+
+.tool-btn.loading::after,
+.action-btn.loading::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 12px;
+    height: 12px;
+    margin: -6px 0 0 -6px;
+    border: 2px solid transparent;
+    border-top: 2px solid currentColor;
+    border-radius: 50%;
+    animation: toolbar-spin 1s linear infinite;
+}
+
+@keyframes toolbar-spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Tooltip */
+.tool-btn[title]:hover::after,
+.action-btn[title]:hover::after {
+    content: attr(title);
+    position: absolute;
+    bottom: -30px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.9);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    white-space: nowrap;
+    z-index: 1001;
+    pointer-events: none;
+}
+
+/* Dark theme specific styles */
+.chart-toolbar.theme-dark .tool-group-title {
+    color: #6b7280;
+}
+
+.chart-toolbar.theme-dark .toolbar-header {
+    background: rgba(0, 0, 0, 0.2);
+}

@@ -9,6 +9,10 @@ class BTCUSDChart {
         this.data = [];
         this.isInitialized = false;
 
+        // Drawing overlay support
+        this.drawingManager = null;
+        this.drawingsEnabled = false;
+
         // Default chart options
         this.defaultOptions = {
             layout: {
@@ -70,6 +74,9 @@ class BTCUSDChart {
 
         this.initializeChart();
         this.setupEventListeners();
+
+        // Initialize drawing support if available
+        this.initializeDrawingSupport();
     }
 
     /**
@@ -206,16 +213,97 @@ class BTCUSDChart {
     }
 
     /**
+     * Enable/disable drawing tools
+     * @param {boolean} enabled - Whether to enable drawings
+     */
+    enableDrawings(enabled = true) {
+        if (this.drawingManager) {
+            if (enabled) {
+                this.drawingManager.canvas.style.pointerEvents = 'auto';
+                this.drawingManager.isActive = true;
+            } else {
+                this.drawingManager.canvas.style.pointerEvents = 'none';
+                this.drawingManager.isActive = false;
+                this.drawingManager.setActiveTool(null);
+            }
+        }
+        this.drawingsEnabled = enabled && !!this.drawingManager;
+    }
+
+    /**
+     * Get drawing manager instance
+     * @returns {DrawingManager|null} Drawing manager instance
+     */
+    getDrawingManager() {
+        return this.drawingManager;
+    }
+
+    /**
+     * Check if drawings are enabled
+     * @returns {boolean} True if drawings enabled
+     */
+    isDrawingsEnabled() {
+        return this.drawingsEnabled;
+    }
+
+    /**
+     * Set active drawing tool
+     * @param {BaseTool|null} tool - Drawing tool to activate
+     */
+    setActiveDrawingTool(tool) {
+        if (this.drawingManager) {
+            this.drawingManager.setActiveTool(tool);
+        }
+    }
+
+    /**
+     * Clear all drawings
+     */
+    clearAllDrawings() {
+        if (this.drawingManager) {
+            this.drawingManager.clearAllDrawings();
+        }
+    }
+
+    /**
+     * Export drawings
+     * @returns {Array} Array of drawing objects
+     */
+    exportDrawings() {
+        if (this.drawingManager) {
+            return this.drawingManager.exportDrawings();
+        }
+        return [];
+    }
+
+    /**
+     * Import drawings
+     * @param {Array} drawings - Array of drawing objects
+     */
+    importDrawings(drawings) {
+        if (this.drawingManager) {
+            this.drawingManager.importDrawings(drawings);
+        }
+    }
+
+    /**
      * Destroy chart and clean up resources
      */
     destroy() {
         try {
+            // Destroy drawing manager first
+            if (this.drawingManager) {
+                this.drawingManager.destroy();
+                this.drawingManager = null;
+            }
+
             if (this.chart) {
                 this.chart.remove();
                 this.chart = null;
                 this.candlestickSeries = null;
                 this.data = [];
                 this.isInitialized = false;
+                this.drawingsEnabled = false;
             }
         } catch (error) {
             console.error('Failed to destroy chart:', error);
@@ -316,10 +404,55 @@ class BTCUSDChart {
         if (this.chart) {
             this.chart.subscribeCrosshairMove((param) => {
                 if (param.time) {
-                    // Could be used for detailed price display
-                    // console.log('Crosshair at:', param.time, param.seriesPrices);
+                    // Emit event for drawing tools
+                    if (window.eventBus) {
+                        eventBus.emit('chart-crosshair-move', {
+                            time: param.time,
+                            price: param.seriesPrices ? Object.values(param.seriesPrices)[0] : null
+                        });
+                    }
                 }
             });
+        }
+    }
+
+    /**
+     * Initialize drawing support
+     */
+    initializeDrawingSupport() {
+        if (!this.isInitialized) {
+            setTimeout(() => {
+                this.initializeDrawingSupport();
+            }, 100);
+            return;
+        }
+
+        // Check if DrawingManager is available
+        if (typeof DrawingManager !== 'undefined') {
+            try {
+                this.drawingManager = new DrawingManager(this, {
+                    lineWidth: 2,
+                    lineColor: '#FF6B6B',
+                    snapToPrice: true,
+                    enableUndo: true
+                });
+                this.drawingsEnabled = true;
+
+                // Emit chart ready event
+                if (window.eventBus) {
+                    eventBus.emit('chart-drawing-ready', {
+                        chart: this,
+                        drawingManager: this.drawingManager
+                    });
+                }
+
+                console.log('BTCUSDChart: Drawing support initialized');
+            } catch (error) {
+                console.warn('BTCUSDChart: Failed to initialize drawing support:', error);
+                this.drawingsEnabled = false;
+            }
+        } else {
+            console.warn('BTCUSDChart: DrawingManager not available');
         }
     }
 

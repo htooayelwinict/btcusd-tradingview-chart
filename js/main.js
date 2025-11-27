@@ -7,6 +7,10 @@ class BTCUSDApp {
         this.isInitialized = false;
         this.dataFilePath = 'DATA/BTCUSD15.csv';
 
+        // Drawing support
+        this.toolbar = null;
+        this.drawingManager = null;
+
         // Initialize application
         this.init();
     }
@@ -25,6 +29,9 @@ class BTCUSDApp {
 
             // Initialize chart
             this.initializeChart();
+
+            // Initialize drawing support
+            this.initializeDrawingSupport();
 
             // Load and display data
             await this.loadData();
@@ -198,6 +205,42 @@ class BTCUSDApp {
         } catch (error) {
             console.error('Failed to refresh data:', error);
             Utils.showError('Failed to refresh data. Please try again.');
+        }
+    }
+
+    /**
+     * Initialize drawing support
+     */
+    initializeDrawingSupport() {
+        try {
+            // Check if EventBus is available
+            if (!window.eventBus) {
+                console.warn('BTCUSDApp: EventBus not available');
+                return;
+            }
+
+            // Initialize toolbar if available
+            if (typeof Toolbar !== 'undefined') {
+                this.toolbar = new Toolbar(window.eventBus, null);
+                this.toolbar.setPosition('position-top-left');
+                this.toolbar.setTheme('dark');
+                console.log('BTCUSDApp: Toolbar initialized');
+            }
+
+            // Wait for chart drawing support to be ready
+            window.eventBus.on('chart-drawing-ready', (data) => {
+                this.drawingManager = data.drawingManager;
+
+                // Connect drawing manager to toolbar if toolbar exists
+                if (this.toolbar) {
+                    this.toolbar.drawingManager = this.drawingManager;
+                    console.log('BTCUSDApp: Drawing manager connected to toolbar');
+                }
+
+                console.log('BTCUSDApp: Drawing manager ready');
+            });
+        } catch (error) {
+            console.warn('BTCUSDApp: Failed to initialize drawing support:', error);
         }
     }
 

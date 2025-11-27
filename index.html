@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://unpkg.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none';">
     <title>BTCUSD 15-Minute Chart</title>
 
     <!-- TradingView Lightweight Charts -->
@@ -10,6 +11,7 @@
 
     <!-- Styles -->
     <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="css/toolbar.css">
 </head>
 <body>
     <div class="container">
@@ -22,7 +24,9 @@
         </header>
 
         <main>
-            <div id="chart-container"></div>
+            <div id="chart-container">
+                <div id="toolbar-container"></div>
+            </div>
 
             <div id="chart-info">
                 <div class="info-section">
@@ -42,6 +46,23 @@
     </div>
 
     <!-- Scripts -->
+    <!-- Security -->
+    <script src="js/security/sanitizer.js"></script>
+
+    <!-- Core Infrastructure -->
+    <script src="js/core/EventBus.js"></script>
+
+    <!-- Drawing System -->
+    <script src="js/drawings/tools/BaseTool.js"></script>
+    <script src="js/drawings/tools/TrendLineTool.js"></script>
+    <script src="js/drawings/tools/HorizontalLineTool.js"></script>
+    <script src="js/drawings/tools/FibRetracementTool.js"></script>
+    <script src="js/drawings/DrawingManager.js"></script>
+
+    <!-- UI Components -->
+    <script src="js/ui/Toolbar.js"></script>
+
+    <!-- Application -->
     <script src="js/utils.js"></script>
     <script src="js/dataProcessor.js"></script>
     <script src="js/chart.js"></script>

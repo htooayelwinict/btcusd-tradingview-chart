@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none';">
+    <title>XSS Resistance Test</title>
+    <style>
+        body { font-family: monospace; padding: 20px; background: #1a1a1a; color: #fff; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #333; }
+        .payload { color: #ff6b6b; }
+        .result { color: #4ecdc4; }
+        .safe { color: #51cf66; }
+        .unsafe { color: #ff6b6b; }
+    </style>
+</head>
+<body>
+    <h1>XSS Resistance Test</h1>
+
+    <div id="test-results"></div>
+
+    <script src="js/security/sanitizer.js"></script>
+    <script>
+        const testResults = document.getElementById('test-results');
+
+        const xssPayloads = [
+            '\\" onclick=\\"alert(1)\\',
+            '<svg/onload=alert(1)>',
+            'javascript:alert(1)',
+            '<script>alert(1)</script>',
+            '<iframe src=\\"javascript:alert(1)\\"></iframe>',
+            '<object data=\\"javascript:alert(1)\\"></object>',
+            '<embed src=\\"javascript:alert(1)\\"></embed>',
+            '<style>@import \\"javascript:alert(1)\\"</style>',
+            '<a href=\\"javascript:alert(1)\\">click</a>',
+            '<img src=\\"x\\" onerror=\\"alert(1)\\">',
+            '<body onload=alert(1)>',
+            '<details open ontoggle=alert(1)>',
+            '<video><source onerror=\\"alert(1)\\">',
+            'data:text/html,<script>alert(1)</script>',
+            '<div onclick=\\"alert(1)\\">click</div>',
+            '<input onfocus=\\"alert(1)\\" autofocus>',
+            '<select onfocus=\\"alert(1)\\" autofocus>',
+            '<textarea onfocus=\\"alert(1)\\" autofocus>',
+            '<video><source onerror=\\"alert(1)\\">',
+            '<audio src=x onerror=\\"alert(1)\\">',
+            '<div style=\\"background:url(javascript:alert(1))\\">',
+            '<svg xmlns=\\"http://www.w3.org/2000/svg\\" onload=\\"alert(1)\\"></svg>',
+            '<math xmlns=\\"http://www.w3.org/1998/Math/MathML\\" display=\\"block\\" onmouseover=\\"alert(1)\\">',
+            '<xmp onclick=\\"alert(1)\\">x</xmp>',
+            '<plaintext onclick=\\"alert(1)\\">x</plaintext>',
+            '<listing onclick=\\"alert(1)\\">x</listing>',
+            '<comment onclick=\\"alert(1)\\">x</comment>',
+            '<marquee onclick=\\"alert(1)\\">x</marquee>',
+            '<blink onclick=\\"alert(1)\\">x</blink>',
+            '<isindex action=\\"javascript:alert(1)\\" type=\\"submit\\">',
+            '<form action=\\"javascript:alert(1)\\"><input type=submit></form>',
+            '<button formaction=\\"javascript:alert(1)\\">x</button>',
+            '<input type=\\"image\\" src=\\"x\\" onerror=\\"alert(1)\\">',
+            '<command onclick=\\"alert(1)\\">x</command>',
+            '<menuitem onclick=\\"alert(1)\\">x</menuitem>',
+            '<bgsound src=\\"javascript:alert(1)\\">',
+            '<embed src=\\"javascript:alert(1)\\">',
+            '<meta http-equiv=\\"refresh\\" content=\\"0;url=javascript:alert(1)\\">',
+            '<link rel=\\"stylesheet\\" href=\\"javascript:alert(1)\\">',
+            '<style>@import \\"javascript:alert(1)\\"</style>',
+            '<table background=\\"javascript:alert(1)\\"></table>',
+            '<td background=\\"javascript:alert(1)\\">x</td>',
+            '<iframe src=\\"javascript:alert(1)\\"></iframe>',
+            '<object data=\\"javascript:alert(1)\\"></object>',
+            '<embed src=\\"data:text/html,<script>alert(1)</script>\\">',
+            '<applet code=\\"javascript:alert(1)\\">',
+            '<object classid=\\"clsid:...\\"></object>',
+            '<frameset><frame src=\\"javascript:alert(1)\\"></frameset>'
+        ];
+
+        function createSection(title, content) {
+            const section = document.createElement('div');
+            section.className = 'test-section';
+
+            const titleDiv = document.createElement('div');
+            titleDiv.textContent = title;
+            titleDiv.style.fontWeight = 'bold';
+            section.appendChild(titleDiv);
+
+            const contentDiv = document.createElement('div');
+            contentDiv.textContent = content;
+            section.appendChild(contentDiv);
+
+            return section;
+        }
+
+        function runTests() {
+            let safeCount = 0;
+            let totalCount = 0;
+
+            xssPayloads.forEach(payload => {
+                totalCount++;
+
+                const hasXSS = Sanitizer.hasXSSPayload(payload);
+                const sanitized = Sanitizer.sanitizeText(payload);
+                const sanitizedHTML = Sanitizer.sanitizeHTML(payload);
+
+                const testDiv = createSection(`Test ${totalCount}`, '');
+
+                const payloadDiv = createSection('Payload:', payload);
+                testDiv.appendChild(payloadDiv);
+
+                const xssResultDiv = createSection('XSS Detection:', hasXSS ? 'DETECTED' : 'NOT DETECTED');
+                xssResultDiv.lastChild.className = hasXSS ? 'safe' : 'unsafe';
+                testDiv.appendChild(xssResultDiv);
+
+                const sanitizedDiv = createSection('Sanitized Text:', sanitized);
+                testDiv.appendChild(sanitizedDiv);
+
+                const sanitizedHTMLDiv = createSection('Sanitized HTML:', sanitizedHTML);
+                testDiv.appendChild(sanitizedHTMLDiv);
+
+                const isSafe = !sanitized.includes('<') && !sanitized.includes('>') && !sanitized.includes('"') && !sanitized.includes("'") && !sanitized.includes('`');
+
+                const safetyDiv = createSection('Overall Safety:', isSafe ? 'SAFE' : 'UNSAFE');
+                safetyDiv.lastChild.className = isSafe ? 'safe' : 'unsafe';
+                testDiv.appendChild(safetyDiv);
+
+                if (isSafe) safeCount++;
+
+                testResults.appendChild(testDiv);
+            });
+
+            // Summary
+            const summaryDiv = document.createElement('div');
+            summaryDiv.className = 'test-section';
+            summaryDiv.style.background = safeCount === totalCount ? '#2d5a2d' : '#5a2d2d';
+
+            const summaryTitle = document.createElement('h2');
+            Sanitizer.setSafeText(summaryTitle, 'Test Summary');
+            summaryDiv.appendChild(summaryTitle);
+
+            const summaryContent = [
+                `Safe: ${safeCount}/${totalCount}`,
+                `Success Rate: ${((safeCount/totalCount) * 100).toFixed(1)}%`,
+                safeCount === totalCount ? '✅ ALL PAYLOADS SANITIZED SAFELY' : '❌ SOME PAYLOADS MAY BE UNSAFE'
+            ];
+
+            summaryContent.forEach(text => {
+                const p = document.createElement('p');
+                Sanitizer.setSafeText(p, text);
+                summaryDiv.appendChild(p);
+            });
+
+            testResults.appendChild(summaryDiv);
+        }
+
+        runTests();
+    </script>
+</body>
+</html>
