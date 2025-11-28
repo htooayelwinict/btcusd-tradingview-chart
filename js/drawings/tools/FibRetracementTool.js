@@ -36,24 +36,33 @@ class FibRetracementTool extends BaseTool {
      * @returns {Object} Fibonacci retracement drawing data
      */
     createDrawing(coords, options) {
+        const drawingOptions = { ...this.options, ...options };
+        const startPoint = {
+            time: coords.time,
+            price: coords.price
+        };
+        const endPoint = {
+            time: coords.time,
+            price: coords.price
+        };
+
         return {
             type: 'FibRetracement',
-            startPoint: {
-                time: coords.time,
-                price: coords.price,
-                screenX: coords.screenX,
-                screenY: coords.screenY
-            },
-            endPoint: {
-                time: coords.time,
-                price: coords.price,
-                screenX: coords.screenX,
-                screenY: coords.screenY
-            },
-            levels: this.calculateFibLevels(coords, coords),
-            options: { ...this.options, ...options },
+            startPoint,
+            endPoint,
+            levels: this.calculateFibLevels(startPoint, endPoint, drawingOptions),
+            options: drawingOptions,
             timestamp: Date.now()
         };
+    }
+
+    /**
+     * Override render so we can pass coordinate mapping into draw()
+     */
+    render(ctx, drawing, options = {}, coordinateMapper = null) {
+        if (!ctx || !drawing) return;
+
+        this.draw(ctx, drawing, options, coordinateMapper);
     }
 
     /**
@@ -75,13 +84,11 @@ class FibRetracementTool extends BaseTool {
 
         drawing.endPoint = {
             time: finalCoords.time,
-            price: finalCoords.price,
-            screenX: finalCoords.screenX,
-            screenY: finalCoords.screenY
+            price: finalCoords.price
         };
 
         // Recalculate Fibonacci levels
-        drawing.levels = this.calculateFibLevels(drawing.startPoint, drawing.endPoint);
+        drawing.levels = this.calculateFibLevels(drawing.startPoint, drawing.endPoint, drawing.options);
     }
 
     /**
@@ -93,10 +100,6 @@ class FibRetracementTool extends BaseTool {
         this.updateDrawingData(drawing, coords);
 
         // Calculate additional properties for hit testing
-        const dx = drawing.endPoint.screenX - drawing.startPoint.screenX;
-        const dy = drawing.endPoint.screenY - drawing.startPoint.screenY;
-
-        drawing.lineLength = Math.sqrt(dx * dx + dy * dy);
         drawing.priceRange = Math.abs(drawing.endPoint.price - drawing.startPoint.price);
         drawing.priceDifference = drawing.endPoint.price - drawing.startPoint.price;
         drawing.timeDifference = drawing.endPoint.time - drawing.startPoint.time;
@@ -106,24 +109,23 @@ class FibRetracementTool extends BaseTool {
      * Calculate Fibonacci level positions
      * @param {Object} startPoint - Starting point
      * @param {Object} endPoint - Ending point
+     * @param {Object} options - Drawing options
      * @returns {Array} Array of level objects
      */
-    calculateFibLevels(startPoint, endPoint) {
-        const priceDiff = endPoint.price - startPoint.price;
-        const startY = startPoint.screenY;
-        const endY = endPoint.screenY;
-        const screenDiff = endY - startY;
+    calculateFibLevels(startPoint, endPoint, options = this.options) {
+        if (!startPoint || !endPoint) return [];
 
-        return this.options.levels.map(level => {
+        const priceDiff = (endPoint.price ?? startPoint.price) - startPoint.price;
+        const levelOptions = options.levels || this.options.levels || [];
+
+        return levelOptions.map(level => {
             const price = startPoint.price + (priceDiff * level);
-            const screenY = startY + (screenDiff * level);
 
             return {
-                level: level,
+                level,
                 percentage: (level * 100).toFixed(1),
-                price: price,
-                screenY: screenY,
-                color: this.options.levelColors[level] || this.options.lineColor
+                price,
+                color: (options.levelColors && options.levelColors[level]) || this.options.lineColor
             };
         });
     }
@@ -133,26 +135,95 @@ class FibRetracementTool extends BaseTool {
      * @param {CanvasRenderingContext2D} ctx - Canvas context
      * @param {Object} drawing - Fibonacci drawing data
      * @param {Object} options - Drawing options
+     * @param {Object} coordinateMapper - Coordinate mapping functions
      */
-    draw(ctx, drawing, options) {
+    draw(ctx, drawing, options, coordinateMapper = null) {
         if (!drawing.startPoint || !drawing.endPoint || !drawing.levels) return;
 
         const mergedOptions = { ...this.options, ...options };
+        const startScreen = this.getScreenPoint(drawing.startPoint, coordinateMapper);
+        const endScreen = this.getScreenPoint(drawing.endPoint, coordinateMapper);
+
+        if (!startScreen || !endScreen) return;
+
+        const screenLevels = drawing.levels.map(level => {
+            const fallbackY = startScreen.y + (endScreen.y - startScreen.y) * level.level;
+            return {
+                ...level,
+                screenY: this.getPriceScreenY(level.price, coordinateMapper, fallbackY)
+            };
+        }).filter(level => this.isFiniteNumber(level.screenY));
+
+        if (!screenLevels.length) return;
+
+        const renderData = {
+            ...drawing,
+            startPoint: { ...drawing.startPoint, screenX: startScreen.x, screenY: startScreen.y },
+            endPoint: { ...drawing.endPoint, screenX: endScreen.x, screenY: endScreen.y },
+            levels: screenLevels
+        };
+
+        drawing._screenCache = {
+            startPoint: renderData.startPoint,
+            endPoint: renderData.endPoint,
+            levels: screenLevels
+        };
 
         ctx.save();
+        this.drawTrendLine(ctx, renderData, mergedOptions);
+        this.drawFibLevels(ctx, renderData, mergedOptions);
 
-        // Draw the main trend line (connect start and end points)
-        this.drawTrendLine(ctx, drawing, mergedOptions);
-
-        // Draw Fibonacci levels
-        this.drawFibLevels(ctx, drawing, mergedOptions);
-
-        // Draw labels if enabled
         if (mergedOptions.showLabels) {
-            this.drawLabels(ctx, drawing, mergedOptions);
+            this.drawLabels(ctx, renderData, mergedOptions);
         }
 
         ctx.restore();
+    }
+
+    /**
+     * Map a time/price point to screen coordinates with fallbacks
+     */
+    getScreenPoint(point, coordinateMapper) {
+        if (!point) return null;
+
+        if (coordinateMapper) {
+            try {
+                if (typeof coordinateMapper.timeToScreen === 'function' &&
+                    typeof coordinateMapper.priceToScreen === 'function') {
+                    const x = coordinateMapper.timeToScreen(point.time);
+                    const y = coordinateMapper.priceToScreen(point.price);
+                    if (this.isFiniteNumber(x) && this.isFiniteNumber(y)) {
+                        return { x, y };
+                    }
+                }
+            } catch (error) {
+                console.warn('FibRetracementTool: Failed to convert point to screen coordinates', error);
+            }
+        }
+
+        if (this.isFiniteNumber(point.screenX) && this.isFiniteNumber(point.screenY)) {
+            return { x: point.screenX, y: point.screenY };
+        }
+
+        return null;
+    }
+
+    /**
+     * Map a price to a screen Y coordinate with optional fallback
+     */
+    getPriceScreenY(price, coordinateMapper, fallbackY = null) {
+        if (coordinateMapper && typeof coordinateMapper.priceToScreen === 'function') {
+            const y = coordinateMapper.priceToScreen(price);
+            if (this.isFiniteNumber(y)) {
+                return y;
+            }
+        }
+
+        return fallbackY;
+    }
+
+    isFiniteNumber(value) {
+        return typeof value === 'number' && Number.isFinite(value);
     }
 
     /**

@@ -69,10 +69,12 @@ class BaseTool {
      * @returns {Object} Drawing data object
      */
     startDrawing(coords, options = {}) {
-        if (!coords || coords.time === null || coords.price === null) {
+        if (!coords) {
             throw new Error('Invalid coordinates for drawing');
         }
 
+        // Allow drawing with just screen coordinates for now
+        // Chart coordinate conversion will be improved later
         const mergedOptions = { ...this.options, ...options };
         return this.createDrawing(coords, mergedOptions);
     }
@@ -153,9 +155,47 @@ class BaseTool {
      * @param {CanvasRenderingContext2D} ctx - Canvas context
      * @param {Object} drawing - Drawing data object
      * @param {Object} options - Drawing options
+     * @param {Object} coordinateMapper - Coordinate mapping functions
      */
-    draw(ctx, drawing, options) {
+    draw(ctx, drawing, options, coordinateMapper = null) {
         throw new Error('draw must be implemented in subclass');
+    }
+
+    /**
+     * Convert time/price coordinates to screen coordinates
+     * @param {Object} coords - Coordinates with time/price
+     * @param {Object} coordinateMapper - Coordinate mapping functions
+     * @returns {Object} Screen coordinates {x, y} or null if conversion fails
+     */
+    convertToScreenCoords(coords, coordinateMapper) {
+        if (!coordinateMapper || !coords) return null;
+
+        try {
+            const x = coordinateMapper.timeToScreen(coords.time);
+            const y = coordinateMapper.priceToScreen(coords.price);
+
+            // Validate coordinates are finite numbers
+            if (x !== undefined && x !== null && y !== undefined && y !== null &&
+                this.isFiniteNumber(x) && this.isFiniteNumber(y)) {
+                return { x, y };
+            }
+            return null;
+        } catch (error) {
+            console.warn('BaseTool: Failed to convert coordinates:', error);
+            return null;
+        }
+    }
+
+    /**
+     * Convert time/price coordinates to screen coordinates with fallback
+     * @param {Object} coords - Coordinates with time/price
+     * @param {Object} coordinateMapper - Coordinate mapping functions
+     * @param {Object} fallbackCoords - Fallback screen coordinates
+     * @returns {Object} Screen coordinates {x, y}
+     */
+    convertToScreenCoordsWithFallback(coords, coordinateMapper, fallbackCoords) {
+        const screenCoords = this.convertToScreenCoords(coords, coordinateMapper);
+        return screenCoords || fallbackCoords || { x: 0, y: 0 };
     }
 
     /**

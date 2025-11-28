@@ -205,4 +205,6 @@ const Utils = {
 // Export for use in other modules
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = Utils;
+} else if (typeof window !== 'undefined') {
+    window.Utils = Utils;
 }

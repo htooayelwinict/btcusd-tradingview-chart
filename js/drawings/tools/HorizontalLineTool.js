@@ -35,9 +35,6 @@ class HorizontalLineTool extends BaseTool {
         return {
             type: 'HorizontalLine',
             price: price,
-            screenY: coords.screenY,
-            startX: coords.screenX,
-            endX: coords.screenX,
             options: { ...this.options, ...options },
             timestamp: Date.now()
         };
@@ -49,9 +46,6 @@ class HorizontalLineTool extends BaseTool {
      * @param {Object} coords - Current coordinates
      */
     updateDrawingData(drawing, coords) {
-        // Update horizontal line width based on X position
-        drawing.endX = coords.screenX;
-
         // Snap to price if enabled and we have valid price data
         if (drawing.options.snapToPrice && coords.price !== null) {
             drawing.price = Math.round(coords.price * 100) / 100;
@@ -65,14 +59,7 @@ class HorizontalLineTool extends BaseTool {
      */
     finalizeDrawingData(drawing, coords) {
         this.updateDrawingData(drawing, coords);
-
-        // Set line to extend across entire visible chart area
-        const rect = drawing.canvasRect || { width: 800, height: 400 };
-        drawing.startX = 0;
-        drawing.endX = rect.width;
-
-        // Calculate line length for hit testing
-        drawing.lineLength = drawing.endX - drawing.startX;
+        // Horizontal lines will extend across entire chart area during rendering
     }
 
     /**
@@ -80,11 +67,24 @@ class HorizontalLineTool extends BaseTool {
      * @param {CanvasRenderingContext2D} ctx - Canvas context
      * @param {Object} drawing - Horizontal line drawing data
      * @param {Object} options - Drawing options
+     * @param {Object} coordinateMapper - Coordinate mapping functions
      */
-    draw(ctx, drawing, options) {
-        if (drawing.screenY === undefined) return;
+    draw(ctx, drawing, options, coordinateMapper = null) {
+        if (drawing.price === null || drawing.price === undefined) return;
 
         const mergedOptions = { ...this.options, ...options };
+
+        // Convert price to screen Y coordinate
+        const screenY = coordinateMapper ?
+            coordinateMapper.priceToScreen(drawing.price) :
+            (drawing.screenY || 0);
+
+        if (screenY === null || screenY === undefined) return;
+
+        // Get canvas dimensions for full width line
+        const canvas = ctx.canvas;
+        const startX = 0;
+        const endX = canvas.width;
 
         ctx.save();
         ctx.strokeStyle = mergedOptions.lineColor;
@@ -96,8 +96,8 @@ class HorizontalLineTool extends BaseTool {
 
         // Draw the horizontal line
         ctx.beginPath();
-        ctx.moveTo(drawing.startX, drawing.screenY);
-        ctx.lineTo(drawing.endX, drawing.screenY);
+        ctx.moveTo(startX, screenY);
+        ctx.lineTo(endX, screenY);
         ctx.stroke();
 
         // Draw price label if enabled
@@ -269,7 +269,9 @@ class HorizontalLineTool extends BaseTool {
      * @returns {Object} Horizontal line drawing data
      */
     fromJSON(data, coordinateMapper, chartBounds) {
-        const screenCoords = coordinateMapper(Date.now() / 1000, data.price); // Use current time for coordinate mapping
+        const screenX = coordinateMapper.timeToScreen(Date.now() / 1000); // Use current time for coordinate mapping
+        const screenY = coordinateMapper.priceToScreen(data.price);
+        const screenCoords = { x: screenX, y: screenY };
 
         return {
             type: data.type,

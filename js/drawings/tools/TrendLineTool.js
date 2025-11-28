@@ -28,15 +28,11 @@ class TrendLineTool extends BaseTool {
             type: 'TrendLine',
             startPoint: {
                 time: coords.time,
-                price: coords.price,
-                screenX: coords.screenX,
-                screenY: coords.screenY
+                price: coords.price
             },
             endPoint: {
                 time: coords.time,
-                price: coords.price,
-                screenX: coords.screenX,
-                screenY: coords.screenY
+                price: coords.price
             },
             options: { ...this.options, ...options },
             timestamp: Date.now()
@@ -63,9 +59,7 @@ class TrendLineTool extends BaseTool {
 
         drawing.endPoint = {
             time: finalCoords.time,
-            price: finalCoords.price,
-            screenX: finalCoords.screenX,
-            screenY: finalCoords.screenY
+            price: finalCoords.price
         };
     }
 
@@ -95,24 +89,33 @@ class TrendLineTool extends BaseTool {
      * @param {CanvasRenderingContext2D} ctx - Canvas context
      * @param {Object} drawing - Trend line drawing data
      * @param {Object} options - Drawing options
+     * @param {Object} coordinateMapper - Coordinate mapping functions
      */
-    draw(ctx, drawing, options) {
+    draw(ctx, drawing, options, coordinateMapper = null) {
         if (!drawing.startPoint || !drawing.endPoint) return;
 
         const mergedOptions = { ...this.options, ...options };
 
+        // Convert time/price coordinates to screen coordinates
+        const startScreen = this.convertToScreenCoords(drawing.startPoint, coordinateMapper);
+        const endScreen = this.convertToScreenCoords(drawing.endPoint, coordinateMapper);
+
+        // If conversion failed completely, skip drawing
+        if (!startScreen || !endScreen) return;
+
         ctx.save();
         ctx.strokeStyle = mergedOptions.lineColor;
-        ctx.lineWidth = mergedOptions.lineWidth;
+        ctx.lineWidth = mergedOptions.lineWidth * (window.devicePixelRatio || 1);
         ctx.lineCap = 'round';
 
         // Draw the main line
         ctx.beginPath();
 
-        let startX = drawing.startPoint.screenX;
-        let startY = drawing.startPoint.screenY;
-        let endX = drawing.endPoint.screenX;
-        let endY = drawing.endPoint.screenY;
+        const dpr = window.devicePixelRatio || 1;
+        let startX = startScreen.x * dpr;
+        let startY = startScreen.y * dpr;
+        let endX = endScreen.x * dpr;
+        let endY = endScreen.y * dpr;
 
         // Extend line if requested
         if (mergedOptions.extendLeft || mergedOptions.extendRight) {
@@ -135,9 +138,21 @@ class TrendLineTool extends BaseTool {
         ctx.lineTo(endX, endY);
         ctx.stroke();
 
+        // Convert back for endpoint drawing
+        const startPointForDrawing = {
+            ...drawing.startPoint,
+            screenX: startScreen.x,
+            screenY: startScreen.y
+        };
+        const endPointForDrawing = {
+            ...drawing.endPoint,
+            screenX: endScreen,
+            screenY: endScreen
+        };
+
         // Draw endpoints
-        this.drawEndpoint(ctx, drawing.startPoint, mergedOptions.lineColor, mergedOptions.lineWidth);
-        this.drawEndpoint(ctx, drawing.endPoint, mergedOptions.lineColor, mergedOptions.lineWidth);
+        this.drawEndpoint(ctx, startPointForDrawing, mergedOptions.lineColor, mergedOptions.lineWidth);
+        this.drawEndpoint(ctx, endPointForDrawing, mergedOptions.lineColor, mergedOptions.lineWidth);
 
         // Draw label if line is long enough
         if (drawing.lineLength && drawing.lineLength > 50) {
@@ -155,9 +170,10 @@ class TrendLineTool extends BaseTool {
      * @param {number} lineWidth - Line width
      */
     drawEndpoint(ctx, point, color, lineWidth) {
+        const dpr = window.devicePixelRatio || 1;
         ctx.fillStyle = color;
         ctx.beginPath();
-        ctx.arc(point.screenX, point.screenY, lineWidth + 2, 0, Math.PI * 2);
+        ctx.arc(point.screenX * dpr, point.screenY * dpr, (lineWidth + 2) * dpr, 0, Math.PI * 2);
         ctx.fill();
     }
 
