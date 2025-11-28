@@ -48,7 +48,7 @@ class BTCUSDChart {
                 }
             },
             crosshair: {
-                mode: 1,
+                mode: LightweightCharts.CrosshairMode.Normal,
                 vertLine: {
                     width: 1,
                     color: 'rgba(224, 227, 235, 0.5)',
@@ -66,6 +66,20 @@ class BTCUSDChart {
             localization: {
                 priceFormatter: this.formatPrice.bind(this),
                 timeFormatter: this.formatTime.bind(this)
+            },
+            handleScroll: {
+                mouseWheel: true,
+                pressedMouseMove: true,
+                vertTouchDrag: true,
+                horzTouchDrag: true
+            },
+            handleScale: {
+                mouseWheel: true,
+                pinch: true,
+                axisPressedMouseMove: {
+                    time: true,
+                    price: true
+                }
             }
         };
 
@@ -400,15 +414,33 @@ class BTCUSDChart {
         const debouncedResize = Utils.debounce(() => this.resize(), 250);
         window.addEventListener('resize', debouncedResize);
 
-        // Handle crosshair move for potential price display
+        // Handle crosshair move for free mouse movement and drawing tools
         if (this.chart) {
             this.chart.subscribeCrosshairMove((param) => {
-                if (param.time) {
-                    // Emit event for drawing tools
+                if (param.point) {
+                    // Use raw screen coordinates for free movement
+                    let price = null;
+                    let time = null;
+
+                    if (param.point.y !== undefined && this.candlestickSeries) {
+                        // Convert screen coordinates to price for free movement
+                        price = this.candlestickSeries.coordinateToPrice(param.point.y);
+                    }
+
+                    if (param.point.x !== undefined) {
+                        // Convert screen coordinates to time for free movement
+                        time = this.chart.timeScale().coordinateToTime(param.point.x);
+                    }
+
+                    // Emit event for drawing tools with free-moving coordinates
                     if (window.eventBus) {
-                        eventBus.emit('chart-crosshair-move', {
-                            time: param.time,
-                            price: param.seriesPrices ? Object.values(param.seriesPrices)[0] : null
+                        window.eventBus.emit('chart-crosshair-move', {
+                            time: time,
+                            price: price,
+                            screenX: param.point.x,
+                            screenY: param.point.y,
+                            // Also provide snapped data if needed
+                            snappedPrice: param.seriesPrices ? Object.values(param.seriesPrices)[0] : null
                         });
                     }
                 }
@@ -440,7 +472,7 @@ class BTCUSDChart {
 
                 // Emit chart ready event
                 if (window.eventBus) {
-                    eventBus.emit('chart-drawing-ready', {
+                    window.eventBus.emit('chart-drawing-ready', {
                         chart: this,
                         drawingManager: this.drawingManager
                     });
@@ -469,6 +501,175 @@ class BTCUSDChart {
         } catch (error) {
             console.error('Failed to take screenshot:', error);
             return null;
+        }
+    }
+
+    /**
+     * Get price scale by ID
+     * @param {string} scaleId - Scale ID ('right' or 'left')
+     * @returns {object|null} Price scale object
+     */
+    getPriceScaleById(scaleId = 'right') {
+        try {
+            if (this.candlestickSeries) {
+                // For Lightweight Charts, get price scale from the series
+                return this.candlestickSeries.priceScale();
+            }
+            return null;
+        } catch (error) {
+            console.warn('BTCUSDChart: Failed to get price scale:', error);
+            return null;
+        }
+    }
+
+    /**
+     * Get time scale
+     * @returns {object|null} Time scale object
+     */
+    getTimeScale() {
+        try {
+            if (this.chart) {
+                return this.chart.timeScale();
+            }
+            return null;
+        } catch (error) {
+            console.warn('BTCUSDChart: Failed to get time scale:', error);
+            return null;
+        }
+    }
+
+    /**
+     * Convert screen X coordinate to time
+     * @param {number} x - Screen X coordinate
+     * @returns {number|null} Time value or null if conversion fails
+     */
+    screenToTime(x) {
+        try {
+            const timeScale = this.getTimeScale();
+            if (timeScale) {
+                // For Lightweight Charts, use coordinateToTime
+                const time = timeScale.coordinateToTime(x);
+                return time;
+            }
+            return null;
+        } catch (error) {
+            console.warn('BTCUSDChart: Failed to convert screen to time:', error);
+            return null;
+        }
+    }
+
+    /**
+     * Convert screen Y coordinate to price
+     * @param {number} y - Screen Y coordinate
+     * @param {string} scaleId - Price scale ID
+     * @returns {number|null} Price value or null if conversion fails
+     */
+    screenToPrice(y, scaleId = 'right') {
+        try {
+            if (!this.candlestickSeries) return null;
+            // For Lightweight Charts, use series.coordinateToPrice
+            const price = this.candlestickSeries.coordinateToPrice(y);
+            return price;
+        } catch (error) {
+            console.warn('BTCUSDChart: Failed to convert screen to price:', error);
+            return null;
+        }
+    }
+
+    /**
+     * Convert time to screen X coordinate
+     * @param {number} time - Time value
+     * @returns {number|null} Screen X coordinate or null if conversion fails
+     */
+    timeToScreen(time) {
+        try {
+            const timeScale = this.getTimeScale();
+            if (timeScale) {
+                // For Lightweight Charts, use timeToCoordinate
+                const x = timeScale.timeToCoordinate(time);
+                return x; // Returns pixel coordinate or undefined if outside visible range
+            }
+            return null;
+        } catch (error) {
+            console.warn('BTCUSDChart: Failed to convert time to screen:', error);
+            return null;
+        }
+    }
+
+    /**
+     * Convert price to screen Y coordinate
+     * @param {number} price - Price value
+     * @param {string} scaleId - Price scale ID
+     * @returns {number|null} Screen Y coordinate or null if conversion fails
+     */
+    priceToScreen(price, scaleId = 'right') {
+        try {
+            if (!this.candlestickSeries) return null;
+            // For Lightweight Charts, use series.priceToCoordinate
+            const y = this.candlestickSeries.priceToCoordinate(price);
+            return y; // Returns pixel coordinate or undefined if outside visible range
+        } catch (error) {
+            console.warn('BTCUSDChart: Failed to convert price to screen:', error);
+            return null;
+        }
+    }
+
+    /**
+     * Subscribe to chart changes (pan/zoom)
+     * @param {function} callback - Callback function to call on chart changes
+     * @returns {object|null} Subscription object or null if subscription fails
+     */
+    subscribeToChartChanges(callback) {
+        try {
+            const timeScale = this.getTimeScale();
+            const priceScale = this.getPriceScaleById();
+
+            const subscriptions = [];
+
+            if (timeScale && timeScale.subscribeVisibleLogicalRangeChange) {
+                const timeSub = {
+                    unsubscribe: () => timeScale.unsubscribeVisibleLogicalRangeChange(callback)
+                };
+                timeScale.subscribeVisibleLogicalRangeChange(callback);
+                subscriptions.push(timeSub);
+            }
+
+            if (priceScale && priceScale.subscribeVisibleLogicalRangeChange) {
+                const priceSub = {
+                    unsubscribe: () => priceScale.unsubscribeVisibleLogicalRangeChange(callback)
+                };
+                priceScale.subscribeVisibleLogicalRangeChange(callback);
+                subscriptions.push(priceSub);
+            }
+
+            return {
+                unsubscribe: () => {
+                    subscriptions.forEach(sub => {
+                        try {
+                            sub.unsubscribe();
+                        } catch (e) {
+                            console.warn('Failed to unsubscribe from chart changes:', e);
+                        }
+                    });
+                }
+            };
+        } catch (error) {
+            console.warn('BTCUSDChart: Failed to subscribe to chart changes:', error);
+            return null;
+        }
+    }
+
+    /**
+     * Unsubscribe from chart changes
+     * @param {object} subscription - Subscription object returned from subscribeToChartChanges
+     */
+    unsubscribeFromChartChanges(subscription) {
+        try {
+            if (subscription && subscription.unsubscribe) {
+                subscription.unsubscribe();
+            }
+        } catch (error) {
+            console.warn('BTCUSDChart: Failed to unsubscribe from chart changes:', error);
         }
     }
 }

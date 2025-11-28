@@ -7,11 +7,9 @@ class DrawingManager {
     constructor(chartInstance, options = {}) {
         this.chart = chartInstance;
         this.container = chartInstance.container;
-        this.canvas = null;
-        this.ctx = null;
         this.isActive = false;
         this.currentTool = null;
-        this.drawings = new Map();
+        this.drawings = new Map(); // Map of drawingId -> primitiveInstance
         this.currentDrawing = null;
         this.isDrawing = false;
 
@@ -27,21 +25,55 @@ class DrawingManager {
             ...options
         };
 
-        // Coordinate transformation helpers
-        this.timeScale = null;
-        this.priceScale = null;
+        // Primitive-based drawing system
+        this.primitives = new Map(); // Map of drawingId -> primitiveInstance
 
-        // Performance optimization
-        this.needsRedraw = false;
-        this.animationFrameId = null;
+        // Navigation lock state
+        this.originalNavigationOptions = null;
+        this.navigationLocked = false;
 
        // Tool registry for available drawing tools
         this.tools = new Map();
 
-        this.initializeCanvas();
+        // Initialize coordinate mapper and tools
+        this.initializeCoordinateMapper();
         this.initializeTools();
         this.bindEvents();
         this.setupEventBusListeners();
+
+        // Cache original navigation defaults before any drawing operations
+        this.cacheOriginalNavigationOptions();
+
+        console.log('DrawingManager: Primitive-based drawing system initialized');
+    }
+
+    /**
+     * Cache original navigation options before any drawing operations
+     */
+    cacheOriginalNavigationOptions() {
+        try {
+            // Use explicit defaults instead of reading current chart options
+            // This ensures we cache the correct navigation defaults
+            this.originalNavigationOptions = {
+                handleScroll: {
+                    mouseWheel: true,
+                    pressedMouseMove: true,
+                    vertTouchDrag: true,
+                    horzTouchDrag: true
+                },
+                handleScale: {
+                    mouseWheel: true,
+                    pinch: true,
+                    axisPressedMouseMove: {
+                        time: true,
+                        price: true
+                    }
+                }
+            };
+            console.log('DrawingManager: Original navigation options cached with explicit defaults');
+        } catch (error) {
+            console.warn('DrawingManager: Failed to cache navigation options:', error);
+        }
     }
 
     /**
@@ -62,78 +94,82 @@ class DrawingManager {
     }
 
     /**
-     * Initialize canvas overlay
+     * Initialize coordinate mapper for primitive system
      */
-    initializeCanvas() {
-        // Create canvas element
-        this.canvas = document.createElement('canvas');
-        this.canvas.style.position = 'absolute';
-        this.canvas.style.top = '0';
-        this.canvas.style.left = '0';
-        this.canvas.style.pointerEvents = 'none';
-        this.canvas.style.zIndex = '1000';
-        this.canvas.className = 'drawing-canvas';
-
-        // Get TradingView chart instance for coordinate mapping
-        const tvChart = this.chart.getChart();
-        if (tvChart) {
-            this.timeScale = tvChart.timeScale();
-            // Lightweight Charts doesn't have getPriceScale, use default price scale
-            this.priceScale = null; // Will handle coordinate transformation differently
-        }
-
-        // Add canvas to chart container
-        this.container.appendChild(this.canvas);
-        this.ctx = this.canvas.getContext('2d');
-
-        // Set canvas size
-        this.resizeCanvas();
-
-        // Only enable pointer events when drawing tool is active
-        this.canvas.style.pointerEvents = 'none';
-
-        console.log('DrawingManager: Canvas overlay initialized');
+    initializeCoordinateMapper() {
+        this.coordinateMapper = {
+            timeToScreen: (time) => {
+                try {
+                    const timeScale = this.chart.chart.timeScale();
+                    const x = timeScale.timeToCoordinate(time);
+                    return x;
+                } catch (error) {
+                    console.warn('DrawingManager: timeToScreen failed:', error);
+                    return undefined;
+                }
+            },
+            priceToScreen: (price) => {
+                try {
+                    if (!this.chart.candlestickSeries) return undefined;
+                    const y = this.chart.candlestickSeries.priceToCoordinate(price);
+                    return y;
+                } catch (error) {
+                    console.warn('DrawingManager: priceToScreen failed:', error);
+                    return undefined;
+                }
+            },
+            screenToTime: (x) => {
+                try {
+                    const timeScale = this.chart.chart.timeScale();
+                    const time = timeScale.coordinateToTime(x);
+                    return time;
+                } catch (error) {
+                    console.warn('DrawingManager: screenToTime failed:', error);
+                    return undefined;
+                }
+            },
+            screenToPrice: (y) => {
+                try {
+                    if (!this.chart.candlestickSeries) return undefined;
+                    const price = this.chart.candlestickSeries.coordinateToPrice(y);
+                    return price;
+                } catch (error) {
+                    console.warn('DrawingManager: screenToPrice failed:', error);
+                    return undefined;
+                }
+            }
+        };
     }
 
+    
     /**
-     * Resize canvas to match chart container
-     */
-    resizeCanvas() {
-        const rect = this.container.getBoundingClientRect();
-        const pixelRatio = window.devicePixelRatio || 1;
-
-        this.canvas.width = rect.width * pixelRatio;
-        this.canvas.height = rect.height * pixelRatio;
-        this.canvas.style.width = rect.width + 'px';
-        this.canvas.style.height = rect.height + 'px';
-
-        this.ctx.scale(pixelRatio, pixelRatio);
-
-        // Redraw all drawings after resize
-        this.scheduleRedraw();
-    }
-
-    /**
-     * Bind mouse/touch events for drawing
+     * Bind mouse/touch events for drawing using chart's built-in event system
      */
     bindEvents() {
-        this.canvas.addEventListener('mousedown', this.handleMouseDown.bind(this));
-        this.canvas.addEventListener('mousemove', this.handleMouseMove.bind(this));
-        this.canvas.addEventListener('mouseup', this.handleMouseUp.bind(this));
-        this.canvas.addEventListener('mouseleave', this.handleMouseLeave.bind(this));
+        // Use the chart container for mouse events when drawing is active
+        this.chartContainer = this.container;
+
+        // Bind mouse events to chart container
+        this.handleMouseDown = this.handleMouseDown.bind(this);
+        this.handleMouseMove = this.handleMouseMove.bind(this);
+        this.handleMouseUp = this.handleMouseUp.bind(this);
+        this.handleMouseLeave = this.handleMouseLeave.bind(this);
 
         // Touch events for mobile
-        this.canvas.addEventListener('touchstart', this.handleTouchStart.bind(this));
-        this.canvas.addEventListener('touchmove', this.handleTouchMove.bind(this));
-        this.canvas.addEventListener('touchend', this.handleTouchEnd.bind(this));
+        this.handleTouchStart = this.handleTouchStart.bind(this);
+        this.handleTouchMove = this.handleTouchMove.bind(this);
+        this.handleTouchEnd = this.handleTouchEnd.bind(this);
 
         // Window resize
         const debouncedResize = Utils.debounce(() => {
-            this.resizeCanvas();
+            // Trigger chart update which will redraw primitives
+            if (this.chart.chart) {
+                this.chart.chart.applyOptions({});
+            }
         }, 250);
         window.addEventListener('resize', debouncedResize);
 
-        console.log('DrawingManager: Event listeners bound');
+        console.log('DrawingManager: Event listeners bound for primitive system');
     }
 
     /**
@@ -178,12 +214,60 @@ class DrawingManager {
     }
 
     /**
+     * Disable chart panning and zooming interactions
+     */
+    disableNavigation() {
+        if (!this.chart.chart || this.navigationLocked) return;
+
+        // Apply disabled interaction options
+        this.chart.chart.applyOptions({
+            handleScroll: {
+                mouseWheel: false,
+                pressedMouseMove: false,
+                vertTouchDrag: false,
+                horzTouchDrag: false
+            },
+            handleScale: {
+                mouseWheel: false,
+                pinch: false,
+                axisPressedMouseMove: false
+            }
+        });
+
+        this.navigationLocked = true;
+        console.log('DrawingManager: Chart navigation locked');
+    }
+
+    /**
+     * Restore chart panning and zooming interactions
+     */
+    restoreNavigation() {
+        if (!this.chart.chart || !this.navigationLocked) return;
+
+        if (this.originalNavigationOptions) {
+            // Restore original navigation defaults
+            this.chart.chart.applyOptions({
+                handleScroll: this.originalNavigationOptions.handleScroll,
+                handleScale: this.originalNavigationOptions.handleScale
+            });
+            // Note: Keep originalNavigationOptions intact for future use
+        }
+
+        this.navigationLocked = false;
+        console.log('DrawingManager: Chart navigation unlocked');
+    }
+
+    /**
      * Set active drawing tool
      * @param {Object} tool - Drawing tool instance
      */
     setActiveTool(tool) {
         if (this.currentTool) {
             this.currentTool.deactivate();
+            // Remove event listeners when deactivating
+            this.removeChartEventListeners();
+            // Restore navigation when deactivating tool
+            this.restoreNavigation();
         }
 
         this.currentTool = tool;
@@ -191,14 +275,45 @@ class DrawingManager {
 
         if (tool) {
             tool.activate();
-            this.canvas.style.cursor = tool.getCursor() || 'crosshair';
-            this.canvas.style.pointerEvents = 'auto'; // Enable drawing when tool is active
+            this.chartContainer.style.cursor = tool.getCursor() || 'crosshair';
+            this.addChartEventListeners(); // Enable drawing when tool is active
+            // Note: Navigation is NOT disabled here - only during actual drawing
             eventBus.emit('drawing-tool-activated', { tool: tool.getName() });
         } else {
-            this.canvas.style.cursor = 'default';
-            this.canvas.style.pointerEvents = 'none'; // Disable drawing when no tool active
+            this.chartContainer.style.cursor = 'default';
+            this.removeChartEventListeners(); // Disable drawing when no tool active
             eventBus.emit('drawing-tool-deactivated');
         }
+    }
+
+    /**
+     * Add event listeners to chart container when tool is active
+     */
+    addChartEventListeners() {
+        this.chartContainer.addEventListener('mousedown', this.handleMouseDown);
+        this.chartContainer.addEventListener('mousemove', this.handleMouseMove);
+        this.chartContainer.addEventListener('mouseup', this.handleMouseUp);
+        this.chartContainer.addEventListener('mouseleave', this.handleMouseLeave);
+
+        // Touch events for mobile
+        this.chartContainer.addEventListener('touchstart', this.handleTouchStart);
+        this.chartContainer.addEventListener('touchmove', this.handleTouchMove);
+        this.chartContainer.addEventListener('touchend', this.handleTouchEnd);
+    }
+
+    /**
+     * Remove event listeners from chart container when tool is inactive
+     */
+    removeChartEventListeners() {
+        this.chartContainer.removeEventListener('mousedown', this.handleMouseDown);
+        this.chartContainer.removeEventListener('mousemove', this.handleMouseMove);
+        this.chartContainer.removeEventListener('mouseup', this.handleMouseUp);
+        this.chartContainer.removeEventListener('mouseleave', this.handleMouseLeave);
+
+        // Touch events for mobile
+        this.chartContainer.removeEventListener('touchstart', this.handleTouchStart);
+        this.chartContainer.removeEventListener('touchmove', this.handleTouchMove);
+        this.chartContainer.removeEventListener('touchend', this.handleTouchEnd);
     }
 
     /**
@@ -208,35 +323,24 @@ class DrawingManager {
      * @returns {Object} Chart coordinates {time, price}
      */
     screenToChart(screenX, screenY) {
-        const rect = this.canvas.getBoundingClientRect();
+        const rect = this.chartContainer.getBoundingClientRect();
         const x = screenX - rect.left;
         const y = screenY - rect.top;
 
-        // Use TradingView coordinate transformation
-        if (this.timeScale && this.priceScale) {
-            try {
-                const time = this.timeScale.coordinateToTime(x);
-                const price = this.priceScale.coordinateToPrice(y);
+        try {
+            const time = this.coordinateMapper.screenToTime(x);
+            const price = this.coordinateMapper.screenToPrice(y);
 
-                return {
-                    time: time,
-                    price: price,
-                    screenX: x,
-                    screenY: y
-                };
-            } catch (error) {
-                console.warn('DrawingManager: Coordinate conversion failed', error);
-                return { time: null, price: null, screenX: x, screenY: y };
-            }
+            return {
+                time: time,
+                price: price,
+                screenX: x,
+                screenY: y
+            };
+        } catch (error) {
+            console.warn('DrawingManager: Coordinate conversion failed', error);
+            return { time: null, price: null, screenX: x, screenY: y };
         }
-
-        // Fallback calculation
-        return {
-            time: null,
-            price: null,
-            screenX: x,
-            screenY: y
-        };
     }
 
     /**
@@ -246,19 +350,15 @@ class DrawingManager {
      * @returns {Object} Screen coordinates {x, y}
      */
     chartToScreen(time, price) {
-        if (this.timeScale && this.priceScale) {
-            try {
-                const x = this.timeScale.timeToCoordinate(time);
-                const y = this.priceScale.priceToCoordinate(price);
+        try {
+            const x = this.coordinateMapper.timeToScreen(time);
+            const y = this.coordinateMapper.priceToScreen(price);
 
-                return { x, y };
-            } catch (error) {
-                console.warn('DrawingManager: Chart to screen conversion failed', error);
-                return { x: 0, y: 0 };
-            }
+            return { x, y };
+        } catch (error) {
+            console.warn('DrawingManager: Chart to screen conversion failed', error);
+            return { x: 0, y: 0 };
         }
-
-        return { x: 0, y: 0 };
     }
 
     /**
@@ -272,6 +372,9 @@ class DrawingManager {
 
         this.isDrawing = true;
         this.currentDrawing = this.currentTool.startDrawing(coords, this.options);
+
+        // Disable navigation when starting to draw
+        this.disableNavigation();
 
         eventBus.emit('drawing-started', {
             tool: this.currentTool.getName(),
@@ -289,7 +392,7 @@ class DrawingManager {
 
         if (this.isDrawing && this.currentDrawing) {
             this.currentTool.updateDrawing(this.currentDrawing, coords);
-            this.scheduleRedraw();
+            // Primitive system handles real-time updates differently
         } else {
             // Hover effect
             this.currentTool.onHover(coords);
@@ -303,7 +406,7 @@ class DrawingManager {
     }
 
     /**
-     * Handle mouse up event
+     * Handle mouse up event - create and attach primitive
      */
     handleMouseUp(event) {
         if (!this.isDrawing || !this.currentDrawing) return;
@@ -311,27 +414,68 @@ class DrawingManager {
         event.preventDefault();
         const coords = this.screenToChart(event.clientX, event.clientY);
 
+        // Finalize the drawing data
         this.currentTool.finishDrawing(this.currentDrawing, coords);
 
-        // Add to drawings collection
-        const drawingId = this.generateDrawingId();
-        this.drawings.set(drawingId, {
-            id: drawingId,
-            tool: this.currentTool.getName(),
-            data: this.currentDrawing,
-            timestamp: Date.now()
-        });
+        // Create primitive from drawing data
+        let primitive = null;
+        const toolName = this.currentTool.getName();
+
+        if (toolName === 'TrendLine' || toolName === 'trendline') {
+            primitive = this.createTrendLinePrimitive(this.currentDrawing);
+        }
+
+        if (primitive) {
+            // Generate drawing ID and store primitive
+            const drawingId = this.generateDrawingId();
+            this.drawings.set(drawingId, {
+                id: drawingId,
+                tool: toolName,
+                data: this.currentDrawing,
+                primitive: primitive,
+                timestamp: Date.now()
+            });
+
+            // Attach primitive to the series
+            this.chart.candlestickSeries.attachPrimitive(primitive);
+
+            // Trigger chart update to redraw primitive
+            this.chart.chart.applyOptions({});
+
+            console.log(`DrawingManager: Created and attached ${toolName} primitive`, drawingId);
+        }
 
         this.isDrawing = false;
         this.currentDrawing = null;
 
-        this.scheduleRedraw();
+        // Restore navigation when drawing is completed
+        this.restoreNavigation();
 
         eventBus.emit('drawing-completed', {
-            tool: this.currentTool.getName(),
+            tool: toolName,
             coords,
-            drawingId
+            primitive: !!primitive
         });
+    }
+
+    /**
+     * Create a TrendLinePrimitive from drawing data
+     * @param {Object} drawingData - Drawing data from tool
+     * @returns {TrendLinePrimitive|null} Created primitive or null
+     */
+    createTrendLinePrimitive(drawingData) {
+        if (!drawingData || !drawingData.startPoint || !drawingData.endPoint) {
+            console.warn('DrawingManager: Invalid drawing data for primitive creation');
+            return null;
+        }
+
+        try {
+            const primitive = new TrendLinePrimitive(this.chart.candlestickSeries, this.chart.chart, drawingData);
+            return primitive;
+        } catch (error) {
+            console.error('DrawingManager: Failed to create TrendLine primitive:', error);
+            return null;
+        }
     }
 
     /**
@@ -343,6 +487,9 @@ class DrawingManager {
             this.isDrawing = false;
             this.currentDrawing = null;
             this.scheduleRedraw();
+
+            // Restore navigation when drawing is cancelled
+            this.restoreNavigation();
 
             eventBus.emit('drawing-cancelled', {
                 tool: this.currentTool ? this.currentTool.getName() : 'unknown'
@@ -379,61 +526,7 @@ class DrawingManager {
         });
     }
 
-    /**
-     * Schedule canvas redraw
-     */
-    scheduleRedraw() {
-        if (this.animationFrameId) {
-            cancelAnimationFrame(this.animationFrameId);
-        }
-
-        this.animationFrameId = requestAnimationFrame(() => {
-            this.redraw();
-            this.animationFrameId = null;
-        });
-    }
-
-    /**
-     * Redraw all drawings on canvas
-     */
-    redraw() {
-        // Clear canvas
-        const rect = this.canvas.getBoundingClientRect();
-        this.ctx.clearRect(0, 0, rect.width, rect.height);
-
-        // Draw all completed drawings
-        this.drawings.forEach((drawing) => {
-            this.drawDrawing(drawing);
-        });
-
-        // Draw current drawing in progress
-        if (this.isDrawing && this.currentDrawing) {
-            this.drawDrawing({
-                tool: this.currentTool.getName(),
-                data: this.currentDrawing
-            });
-        }
-
-        eventBus.emit('canvas-redrawn', { drawingCount: this.drawings.size });
-    }
-
-    /**
-     * Draw a single drawing on canvas
-     * @param {Object} drawing - Drawing object
-     */
-    drawDrawing(drawing) {
-        if (!drawing || !drawing.data) return;
-
-        try {
-            const tool = this.getToolInstance(drawing.tool);
-            if (tool) {
-                tool.render(this.ctx, drawing.data, this.options);
-            }
-        } catch (error) {
-            console.error(`DrawingManager: Error drawing ${drawing.tool}:`, error);
-        }
-    }
-
+    
     /**
      * Get tool instance by name
      * @param {string} toolName - Name of tool
@@ -442,14 +535,14 @@ class DrawingManager {
     getToolInstance(toolName) {
         if (!toolName) return null;
 
-        // Try to get tool from registry
-        const tool = this.tools.get(toolName);
+        // Try to get tool from registry (case-insensitive)
+        const tool = this.tools.get(toolName) || this.tools.get(toolName.toLowerCase());
         if (tool) {
             return tool;
         }
 
         // Fallback: create tool instance if class is available
-        if (toolName === 'trendline' && typeof TrendLineTool !== 'undefined') {
+        if ((toolName === 'trendline' || toolName === 'TrendLine') && typeof TrendLineTool !== 'undefined') {
             const trendLineTool = new TrendLineTool();
             this.tools.set('trendline', trendLineTool);
             return trendLineTool;
@@ -468,25 +561,43 @@ class DrawingManager {
     }
 
     /**
-     * Clear all drawings
+     * Clear all drawings by detaching primitives
      */
     clearAllDrawings() {
+        // Detach all primitives from the series
+        this.drawings.forEach((drawing) => {
+            if (drawing.primitive) {
+                this.chart.candlestickSeries.detachPrimitive(drawing.primitive);
+            }
+        });
+
         this.drawings.clear();
         this.isDrawing = false;
         this.currentDrawing = null;
-        this.scheduleRedraw();
+
+        // Trigger chart update to reflect cleared drawings
+        this.chart.chart.applyOptions({});
 
         eventBus.emit('all-drawings-cleared');
     }
 
     /**
-     * Remove specific drawing
+     * Remove specific drawing by detaching its primitive
      * @param {string} drawingId - Drawing ID to remove
      */
     removeDrawing(drawingId) {
         if (this.drawings.has(drawingId)) {
+            const drawing = this.drawings.get(drawingId);
+
+            // Detach primitive if it exists
+            if (drawing.primitive) {
+                this.chart.candlestickSeries.detachPrimitive(drawing.primitive);
+            }
+
             this.drawings.delete(drawingId);
-            this.scheduleRedraw();
+
+            // Trigger chart update to reflect removal
+            this.chart.chart.applyOptions({});
 
             eventBus.emit('drawing-removed', { drawingId });
         }
@@ -519,7 +630,8 @@ class DrawingManager {
             });
         });
 
-        this.scheduleRedraw();
+        // Trigger chart update to redraw primitives
+        this.chart.chart.applyOptions({});
         eventBus.emit('drawings-imported', { count: drawingsData.length });
     }
 
@@ -527,21 +639,22 @@ class DrawingManager {
      * Destroy drawing manager and clean up resources
      */
     destroy() {
-        // Cancel any pending redraws
-        if (this.animationFrameId) {
-            cancelAnimationFrame(this.animationFrameId);
-        }
+        // Restore navigation before cleanup
+        this.restoreNavigation();
 
-        // Remove canvas
-        if (this.canvas && this.canvas.parentNode) {
-            this.canvas.parentNode.removeChild(this.canvas);
-        }
+        // Detach all primitives
+        this.clearAllDrawings();
+
+        // Remove event listeners
+        this.removeChartEventListeners();
 
         // Clear references
         this.drawings.clear();
         this.currentTool = null;
         this.currentDrawing = null;
         this.isActive = false;
+        this.originalNavigationOptions = null;
+        this.navigationLocked = false;
 
         console.log('DrawingManager: Destroyed');
     }
